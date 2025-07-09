@@ -20,7 +20,9 @@ import (
 
 func main() {
 	var device string
+	var line int
 	pflag.StringVarP(&device, "device", "d", "/dev/i2c-1", "path to i2c device")
+	pflag.IntVarP(&line, "line", "l", 1, "line number to start printing (1-based)")
 	pflag.Parse()
 	args := pflag.Args()
 
@@ -72,9 +74,9 @@ func main() {
 	lines := strings.Split(text, "\n")
 	lineHeight := f.Metrics().Height.Ceil()
 	
-	for i, line := range lines {
-		drawer.Dot = fixed.P(0, lineHeight*(i+1)-f.Descent)
-		drawer.DrawString(line)
+	for i, textLine := range lines {
+		drawer.Dot = fixed.P(0, lineHeight*(line+i)-f.Descent)
+		drawer.DrawString(textLine)
 	}
 	if err := dev.Draw(dev.Bounds(), img, image.Point{}); err != nil {
 		log.Fatal(err)
