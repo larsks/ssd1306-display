@@ -61,7 +61,7 @@ func (d *Display) Clear() {
 }
 
 func (d *Display) PrintLine(line uint, text string) error {
-	if int(line) > len(d.buffer) {
+	if int(line) >= len(d.buffer) {
 		return fmt.Errorf("request to draw on line %d but display only has %d lines", line, len(d.buffer))
 	}
 
