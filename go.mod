@@ -1,4 +1,4 @@
-module display
+module github.com/larsks/display1306
 
 go 1.23.4
 
