@@ -9,18 +9,17 @@ import (
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
 	"golang.org/x/image/math/fixed"
-	"periph.io/x/conn/v3/i2c"
-	"periph.io/x/conn/v3/i2c/i2creg"
-	"periph.io/x/devices/v3/ssd1306"
 	"periph.io/x/devices/v3/ssd1306/image1bit"
 	"periph.io/x/host/v3"
 )
 
+const (
+	DEFAULT_MAX_LINES uint = 5
+)
+
 type (
 	Display struct {
-		busName    string
-		bus        i2c.BusCloser
-		dev        *ssd1306.Dev
+		dev        SSD1306
 		lines      uint
 		bufferFile string
 		buffer     []string
@@ -30,21 +29,20 @@ type (
 )
 
 // d := NewDisplay().WithBus("/dev/i2c-0").WithBufferFile("/tmp/display.txt")
-func NewDisplay() *Display {
+func NewDisplay(busName string, dev SSD1306) *Display {
 	f := basicfont.Face7x13
 	lineHeight := f.Metrics().Height.Ceil()
 
+	if dev == nil {
+		dev = NewRealSSD1306(busName)
+	}
+
 	return &Display{
-		busName:    "/dev/i2c-1",
-		lines:      5,
+		lines:      DEFAULT_MAX_LINES,
 		font:       f,
 		lineHeight: lineHeight,
+		dev:        dev,
 	}
-}
-
-func (d *Display) WithBus(busName string) *Display {
-	d.busName = busName
-	return d
 }
 
 func (d *Display) WithBufferFile(bufferFile string) *Display {
@@ -53,7 +51,7 @@ func (d *Display) WithBufferFile(bufferFile string) *Display {
 }
 
 func (d *Display) Close() error {
-	return d.bus.Close()
+	return d.dev.Close()
 }
 
 func (d *Display) Clear() {
@@ -72,8 +70,8 @@ func (d *Display) PrintLine(line uint, text string) error {
 }
 
 func (d *Display) PrintLines(line uint, text []string) error {
-	if int(line)+len(text) > len(d.buffer) {
-		return fmt.Errorf("text would overflow display")
+	if int(line)+len(text) > int(d.lines) {
+		return fmt.Errorf("text would overflow display (buffer: %d text: %d start line: %d)", len(d.buffer), len(text), line)
 	}
 
 	for i := range text {
@@ -92,7 +90,7 @@ func (d *Display) updateFromFile() error {
 		if len(lines) > len(d.buffer) {
 			lines = lines[0:len(d.buffer)]
 		}
-		d.buffer = lines
+		copy(d.buffer, lines)
 	} else if !os.IsNotExist(err) {
 		return err
 	}
@@ -113,23 +111,22 @@ func (d *Display) Init() error {
 		}
 	}
 
-	// Use i2creg I²C bus registry to open the specified I²C bus.
-	b, err := i2creg.Open(d.busName)
-	if err != nil {
-		return fmt.Errorf("failed to open i2c bus %s: %w", d.busName, err)
+	if err := d.dev.Open(); err != nil {
+		return fmt.Errorf("failed to initialize device: %w", err)
 	}
-	d.bus = b
-
-	dev, err := ssd1306.NewI2C(b, &ssd1306.DefaultOpts)
-	if err != nil {
-		return fmt.Errorf("failed to initialize ssd1306: %w", err)
-	}
-	d.dev = dev
 
 	return nil
 }
 
 func (d *Display) Update() error {
+	// Write to buffer file if specified
+	if d.bufferFile != "" {
+		bufferContent := strings.Join(d.buffer, "\n")
+		if err := os.WriteFile(d.bufferFile, []byte(bufferContent), 0644); err != nil {
+			return fmt.Errorf("failed to write buffer file: %w", err)
+		}
+	}
+
 	img := image1bit.NewVerticalLSB(d.dev.Bounds())
 	screen := font.Drawer{
 		Dst:  img,
