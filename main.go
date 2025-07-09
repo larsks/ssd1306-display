@@ -59,7 +59,7 @@ func main() {
 	// Get text to display
 	var newText string
 	if len(args) > 0 {
-		newText = strings.Join(args, " ")
+		newText = strings.Join(args, "\n")
 	} else {
 		scanner := bufio.NewScanner(os.Stdin)
 		var lines []string
