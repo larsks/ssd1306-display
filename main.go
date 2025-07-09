@@ -48,19 +48,9 @@ func main() {
 		driver = display.NewFakeSSD1306()
 	}
 
-	// Initialize display
-	d := display.NewDisplay(options.Device, driver).WithBufferFile(options.BufferFile)
-	defer d.Close() //nolint:errcheck
-
-	if err := d.Init(); err != nil {
-		log.Fatal(err)
-	}
-
-	if options.Clear {
-		d.Clear()
-	}
-
 	// Get text to display
+	// This has to happen before calling d.Init(), otherwise we get errors
+	// reading from stdin.
 	var lines []string
 	if len(args) > 0 {
 		lines = args
@@ -72,6 +62,18 @@ func main() {
 		if err := scanner.Err(); err != nil {
 			log.Fatalf("error reading stdin: %v", err)
 		}
+	}
+
+	// Initialize display
+	d := display.NewDisplay(options.Device, driver).WithBufferFile(options.BufferFile)
+	defer d.Close() //nolint:errcheck
+
+	if err := d.Init(); err != nil {
+		log.Fatal(err)
+	}
+
+	if options.Clear {
+		d.Clear()
 	}
 
 	// Update display with new text
