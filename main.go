@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"fmt"
 	"image"
 	"log"
 	"os"
@@ -98,7 +97,6 @@ func main() {
 
 	// Prepare final text for display
 	text := strings.Join(displayLines, "\n")
-	fmt.Printf("got text: %s\n", text)
 
 	// Make sure periph is initialized.
 	if _, err := host.Init(); err != nil {
