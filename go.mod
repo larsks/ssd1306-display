@@ -9,4 +9,4 @@ require (
 	periph.io/x/host/v3 v3.8.5
 )
 
-require github.com/spf13/pflag v1.0.6 // indirect
+require github.com/spf13/pflag v1.0.6

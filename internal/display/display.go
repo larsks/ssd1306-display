@@ -70,7 +70,7 @@ func (d *Display) PrintLine(line uint, text string) error {
 
 func (d *Display) PrintLines(line uint, text []string) error {
 	if int(line)+len(text) > int(d.lines) {
-		return fmt.Errorf("text would overflow display (buffer: %d text: %d start line: %d)", len(d.buffer), len(text), line)
+		return fmt.Errorf("text requires more than %d lines", len(d.buffer))
 	}
 
 	for i := range text {

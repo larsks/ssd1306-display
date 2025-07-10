@@ -9,10 +9,6 @@ import (
 	"github.com/spf13/pflag"
 )
 
-const (
-	MAX_LINES uint = 5
-)
-
 type (
 	Options struct {
 		Device     string
@@ -38,10 +34,6 @@ func init() {
 func main() {
 	pflag.Parse()
 	args := pflag.Args()
-
-	if options.Line > MAX_LINES {
-		log.Fatalf("line number must be less than %d", MAX_LINES)
-	}
 
 	var driver display.SSD1306
 	if options.DryRun {
