@@ -3,6 +3,7 @@ package display
 import (
 	"fmt"
 	"image"
+	"io"
 
 	"periph.io/x/conn/v3/i2c"
 	"periph.io/x/conn/v3/i2c/i2creg"
@@ -12,8 +13,8 @@ import (
 
 type (
 	SSD1306 interface {
+		io.Closer
 		Open() error
-		Close() error
 		Bounds() image.Rectangle
 		Draw(r image.Rectangle, src image.Image, sp image.Point) error
 	}
