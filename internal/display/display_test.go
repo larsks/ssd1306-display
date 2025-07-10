@@ -8,59 +8,110 @@ import (
 	"testing"
 )
 
+// Call represents a method call on the mock
+type Call struct {
+	Method string
+	Args   []interface{}
+}
+
 // Enhanced FakeSSD1306 for testing with call tracking
 type TrackedFakeSSD1306 struct {
 	*FakeSSD1306
-	OpenCalled      bool
-	CloseCalled     bool
-	BoundsCalled    bool
-	DrawCalled      bool
-	DrawCallCount   int
-	LastDrawRect    image.Rectangle
-	LastDrawSrc     image.Image
-	LastDrawPoint   image.Point
-	ShouldErrorOpen bool
-	ShouldErrorClose bool
-	ShouldErrorDraw bool
+	Calls       []Call
+	ErrorOnOpen bool
+	ErrorOnClose bool
+	ErrorOnDraw bool
 }
 
 func NewTrackedFakeSSD1306() *TrackedFakeSSD1306 {
 	return &TrackedFakeSSD1306{
 		FakeSSD1306: NewFakeSSD1306(),
+		Calls:       make([]Call, 0),
 	}
 }
 
 func (t *TrackedFakeSSD1306) Open() error {
-	t.OpenCalled = true
-	if t.ShouldErrorOpen {
+	t.Calls = append(t.Calls, Call{Method: "Open", Args: nil})
+	if t.ErrorOnOpen {
 		return fmt.Errorf("mock open error")
 	}
 	return nil
 }
 
 func (t *TrackedFakeSSD1306) Close() error {
-	t.CloseCalled = true
-	if t.ShouldErrorClose {
+	t.Calls = append(t.Calls, Call{Method: "Close", Args: nil})
+	if t.ErrorOnClose {
 		return fmt.Errorf("mock close error")
 	}
 	return nil
 }
 
 func (t *TrackedFakeSSD1306) Bounds() image.Rectangle {
-	t.BoundsCalled = true
+	t.Calls = append(t.Calls, Call{Method: "Bounds", Args: nil})
 	return t.FakeSSD1306.Bounds()
 }
 
 func (t *TrackedFakeSSD1306) Draw(r image.Rectangle, src image.Image, sp image.Point) error {
-	t.DrawCalled = true
-	t.DrawCallCount++
-	t.LastDrawRect = r
-	t.LastDrawSrc = src
-	t.LastDrawPoint = sp
-	if t.ShouldErrorDraw {
+	t.Calls = append(t.Calls, Call{Method: "Draw", Args: []interface{}{r, src, sp}})
+	if t.ErrorOnDraw {
 		return fmt.Errorf("mock draw error")
 	}
 	return nil
+}
+
+// Test helper functions
+func (t *TrackedFakeSSD1306) WasCalled(method string) bool {
+	for _, call := range t.Calls {
+		if call.Method == method {
+			return true
+		}
+	}
+	return false
+}
+
+func (t *TrackedFakeSSD1306) CallCount(method string) int {
+	count := 0
+	for _, call := range t.Calls {
+		if call.Method == method {
+			count++
+		}
+	}
+	return count
+}
+
+func (t *TrackedFakeSSD1306) LastDrawArgs() (image.Rectangle, image.Image, image.Point) {
+	for i := len(t.Calls) - 1; i >= 0; i-- {
+		if t.Calls[i].Method == "Draw" && len(t.Calls[i].Args) == 3 {
+			return t.Calls[i].Args[0].(image.Rectangle), 
+				   t.Calls[i].Args[1].(image.Image), 
+				   t.Calls[i].Args[2].(image.Point)
+		}
+	}
+	return image.Rectangle{}, nil, image.Point{}
+}
+
+// Test assertion helpers
+func assertNoError(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Errorf("Expected no error but got: %v", err)
+	}
+}
+
+func assertError(t *testing.T, err error, expectedSubstr string) {
+	t.Helper()
+	if err == nil {
+		t.Error("Expected error but got none")
+	} else if expectedSubstr != "" && !strings.Contains(err.Error(), expectedSubstr) {
+		t.Errorf("Expected error to contain %q, got %q", expectedSubstr, err.Error())
+	}
+}
+
+func assertMethodCalled(t *testing.T, mock *TrackedFakeSSD1306, method string) {
+	t.Helper()
+	if !mock.WasCalled(method) {
+		t.Errorf("Expected %s to be called", method)
+	}
 }
 
 func TestNewDisplay(t *testing.T) {
@@ -145,7 +196,7 @@ func TestDisplay_Init(t *testing.T) {
 		{
 			name: "device open error",
 			setupMock: func(mock *TrackedFakeSSD1306) {
-				mock.ShouldErrorOpen = true
+				mock.ErrorOnOpen = true
 			},
 			wantError:   true,
 			errorSubstr: "failed to initialize device",
@@ -180,19 +231,10 @@ func TestDisplay_Init(t *testing.T) {
 			err := display.Init()
 			
 			if tt.wantError {
-				if err == nil {
-					t.Error("Expected error but got none")
-				} else if !strings.Contains(err.Error(), tt.errorSubstr) {
-					t.Errorf("Expected error to contain %q, got %q", tt.errorSubstr, err.Error())
-				}
+				assertError(t, err, tt.errorSubstr)
 			} else {
-				if err != nil {
-					t.Errorf("Expected no error but got: %v", err)
-				}
-				
-				if !mock.OpenCalled {
-					t.Error("Expected Open to be called")
-				}
+				assertNoError(t, err)
+				assertMethodCalled(t, mock, "Open")
 				
 				if len(display.buffer) != int(display.lines) {
 					t.Errorf("Expected buffer length to be %d, got %d", display.lines, len(display.buffer))
@@ -223,21 +265,19 @@ func TestDisplay_Close(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mock := NewTrackedFakeSSD1306()
-			mock.ShouldErrorClose = tt.shouldError
+			mock.ErrorOnClose = tt.shouldError
 			
 			display := NewDisplay("/dev/i2c-0", mock)
 			
 			err := display.Close()
 			
-			if tt.wantError && err == nil {
-				t.Error("Expected error but got none")
-			} else if !tt.wantError && err != nil {
-				t.Errorf("Expected no error but got: %v", err)
+			if tt.wantError {
+				assertError(t, err, "")
+			} else {
+				assertNoError(t, err)
 			}
 			
-			if !mock.CloseCalled {
-				t.Error("Expected Close to be called on device")
-			}
+			assertMethodCalled(t, mock, "Close")
 		})
 	}
 }
@@ -449,7 +489,7 @@ func TestDisplay_Update(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mock := NewTrackedFakeSSD1306()
-			mock.ShouldErrorDraw = tt.mockShouldErr
+			mock.ErrorOnDraw = tt.mockShouldErr
 			
 			display := NewDisplay("/dev/i2c-0", mock)
 			
@@ -470,15 +510,9 @@ func TestDisplay_Update(t *testing.T) {
 			err := display.Update()
 			
 			if tt.wantError {
-				if err == nil {
-					t.Error("Expected error but got none")
-				} else if !strings.Contains(err.Error(), tt.errorSubstr) {
-					t.Errorf("Expected error to contain %q, got %q", tt.errorSubstr, err.Error())
-				}
+				assertError(t, err, tt.errorSubstr)
 			} else {
-				if err != nil {
-					t.Errorf("Expected no error but got: %v", err)
-				}
+				assertNoError(t, err)
 				
 				// Verify buffer file was written if specified
 				if tt.bufferFile != "" {
@@ -498,14 +532,12 @@ func TestDisplay_Update(t *testing.T) {
 				}
 			}
 			
-			if tt.wantDrawCalled && !mock.DrawCalled {
-				t.Error("Expected Draw to be called")
-			}
-			
-			if mock.DrawCalled {
+			if tt.wantDrawCalled {
+				assertMethodCalled(t, mock, "Draw")
 				expectedBounds := mock.Bounds()
-				if mock.LastDrawRect != expectedBounds {
-					t.Errorf("Expected draw rect to be %v, got %v", expectedBounds, mock.LastDrawRect)
+				drawRect, _, _ := mock.LastDrawArgs()
+				if drawRect != expectedBounds {
+					t.Errorf("Expected draw rect to be %v, got %v", expectedBounds, drawRect)
 				}
 			}
 		})
@@ -570,16 +602,11 @@ func TestDisplay_Integration(t *testing.T) {
 	}
 	
 	// Verify all expected calls were made
-	if !mock.OpenCalled {
-		t.Error("Expected Open to be called")
-	}
+	assertMethodCalled(t, mock, "Open")
+	assertMethodCalled(t, mock, "Draw")
 	
-	if !mock.DrawCalled {
-		t.Error("Expected Draw to be called")
-	}
-	
-	if mock.DrawCallCount != 1 {
-		t.Errorf("Expected Draw to be called once, got %d times", mock.DrawCallCount)
+	if mock.CallCount("Draw") != 1 {
+		t.Errorf("Expected Draw to be called once, got %d times", mock.CallCount("Draw"))
 	}
 	
 	// Verify buffer file was written
@@ -600,7 +627,5 @@ func TestDisplay_Integration(t *testing.T) {
 		t.Fatalf("Failed to close: %v", err)
 	}
 	
-	if !mock.CloseCalled {
-		t.Error("Expected Close to be called")
-	}
+	assertMethodCalled(t, mock, "Close")
 }
