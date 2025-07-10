@@ -35,11 +35,6 @@ func main() {
 	pflag.Parse()
 	args := pflag.Args()
 
-	var driver display.SSD1306
-	if options.DryRun {
-		driver = display.NewFakeSSD1306()
-	}
-
 	// Get text to display
 	// This has to happen before calling d.Init(), otherwise we get errors
 	// reading from stdin.
@@ -56,8 +51,16 @@ func main() {
 		}
 	}
 
+	var driver display.SSD1306
+	if options.DryRun {
+		driver = display.NewFakeSSD1306()
+	}
+
 	// Initialize display
-	d := display.NewDisplay(options.Device, driver).WithBufferFile(options.BufferFile)
+	d := display.NewDisplay().
+		WithBufferFile(options.BufferFile).
+		WithBusName(options.Device).
+		WithDriver(driver)
 	defer d.Close() //nolint:errcheck
 
 	if err := d.Init(); err != nil {
