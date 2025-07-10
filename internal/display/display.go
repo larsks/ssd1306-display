@@ -10,7 +10,6 @@ import (
 	"golang.org/x/image/font/basicfont"
 	"golang.org/x/image/math/fixed"
 	"periph.io/x/devices/v3/ssd1306/image1bit"
-	"periph.io/x/host/v3"
 )
 
 const (
@@ -98,11 +97,6 @@ func (d *Display) updateFromFile() error {
 }
 
 func (d *Display) Init() error {
-	// Make sure periph is initialized.
-	if _, err := host.Init(); err != nil {
-		return fmt.Errorf("failed to initialize display: %w", err)
-	}
-
 	d.buffer = make([]string, d.lines)
 
 	if d.bufferFile != "" {

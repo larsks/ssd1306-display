@@ -7,6 +7,7 @@ import (
 	"periph.io/x/conn/v3/i2c"
 	"periph.io/x/conn/v3/i2c/i2creg"
 	"periph.io/x/devices/v3/ssd1306"
+	"periph.io/x/host/v3"
 )
 
 type (
@@ -54,6 +55,11 @@ func (d *FakeSSD1306) Draw(r image.Rectangle, src image.Image, sp image.Point) e
 }
 
 func (d *RealSSD1306) Open() error {
+	// Make sure periph is initialized.
+	if _, err := host.Init(); err != nil {
+		return fmt.Errorf("failed to initialize display: %w", err)
+	}
+
 	b, err := i2creg.Open(d.busName)
 	if err != nil {
 		return fmt.Errorf("failed to open i2c bus %s: %w", d.busName, err)
