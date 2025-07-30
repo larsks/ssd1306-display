@@ -20,21 +20,21 @@ type (
 		driver      SSD1306
 		lines       uint
 		buffer      []string
-		font        *basicfont.Face
+		font        font.Face
 		lineHeight  int
 		initialized bool
 	}
 )
 
 func NewDisplay() *Display {
-	f := basicfont.Face7x13
-	lineHeight := f.Metrics().Height.Ceil()
-
 	return &Display{
-		lines:      DEFAULT_MAX_LINES,
-		font:       f,
-		lineHeight: lineHeight,
+		lines: DEFAULT_MAX_LINES,
 	}
+}
+
+func (d *Display) WithLines(lines uint) *Display {
+	d.lines = lines
+	return d
 }
 
 func (d *Display) WithBusName(busName string) *Display {
@@ -45,6 +45,22 @@ func (d *Display) WithBusName(busName string) *Display {
 func (d *Display) WithDriver(driver SSD1306) *Display {
 	d.driver = driver
 	return d
+}
+
+func (d *Display) WithFont(f font.Face) *Display {
+	d.font = f
+	d.lineHeight = f.Metrics().Height.Ceil()
+	return d
+}
+
+func (d *Display) Build() (*Display, error) {
+	if d.font == nil {
+		f := basicfont.Face7x13
+		lineHeight := f.Metrics().Height.Ceil()
+		d.font = f
+		d.lineHeight = lineHeight
+	}
+	return d, nil
 }
 
 func (d *Display) Init() error {
@@ -122,7 +138,7 @@ func (d *Display) Update() error {
 	}
 
 	for i, textLine := range d.buffer {
-		screen.Dot = fixed.P(0, d.lineHeight*(1+i)-d.font.Descent)
+		screen.Dot = fixed.P(0, d.lineHeight*(1+i)) //-d.font.Descent)
 		screen.DrawString(textLine)
 	}
 	if err := d.driver.Draw(d.driver.Bounds(), img, image.Point{}); err != nil {

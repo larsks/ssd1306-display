@@ -2,19 +2,23 @@ package main
 
 import (
 	"bufio"
+	"io/ioutil"
 	"log"
 	"os"
 
+	"github.com/golang/freetype/truetype"
 	"github.com/larsks/display1306/display"
 	"github.com/spf13/pflag"
 )
 
 type (
 	Options struct {
-		Device string
-		Line   uint
-		Clear  bool
-		DryRun bool
+		Device   string
+		Line     uint
+		Clear    bool
+		DryRun   bool
+		Font     string
+		FontSize float64
 	}
 )
 
@@ -27,6 +31,8 @@ func init() {
 	pflag.UintVarP(&options.Line, "line", "l", 1, "line number to start printing (1-based)")
 	pflag.BoolVarP(&options.Clear, "clear", "k", false, "clear the display and buffer")
 	pflag.BoolVarP(&options.DryRun, "dry-run", "n", false, "run without actual hardware")
+	pflag.StringVar(&options.Font, "font", "", "path to truetype font file")
+	pflag.Float64Var(&options.FontSize, "font-size", 13.0, "font size in points (ignored if --font not provided)")
 }
 
 func main() {
@@ -55,9 +61,33 @@ func main() {
 	}
 
 	// Initialize display
-	d := display.NewDisplay().
+	builder := display.NewDisplay().
 		WithBusName(options.Device).
 		WithDriver(driver)
+
+	if options.Font != "" {
+		fontData, err := ioutil.ReadFile(options.Font)
+		if err != nil {
+			log.Fatalf("failed to read font file: %v", err)
+		}
+
+		tf, err := truetype.Parse(fontData)
+		if err != nil {
+			log.Fatalf("failed to parse font: %v", err)
+		}
+
+		fontFace := truetype.NewFace(tf, &truetype.Options{
+			Size: options.FontSize,
+			DPI:  72,
+		})
+
+		builder = builder.WithFont(fontFace)
+	}
+
+	d, err := builder.Build()
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer d.Close() //nolint:errcheck
 
 	if err := d.Init(); err != nil {
