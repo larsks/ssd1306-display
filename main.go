@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/larsks/display1306/internal/display"
+	"github.com/larsks/display1306/display"
 	"github.com/spf13/pflag"
 )
 

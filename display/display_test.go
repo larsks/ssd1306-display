@@ -685,4 +685,3 @@ func TestDisplay_Integration(t *testing.T) {
 
 	assertMethodCalled(t, mock, "Close")
 }
-
