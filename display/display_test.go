@@ -3,6 +3,7 @@ package display
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"strings"
 	"testing"
 
@@ -691,6 +692,173 @@ func TestDisplay_FontIntegration(t *testing.T) {
 
 	// Verify draw was called
 	assertMethodCalled(t, mock, "Draw")
+}
+
+// TestImage is a helper type for creating test images
+type TestImage struct {
+	bounds image.Rectangle
+	pixels map[image.Point]color.Color
+}
+
+func NewTestImage(width, height int) *TestImage {
+	return &TestImage{
+		bounds: image.Rect(0, 0, width, height),
+		pixels: make(map[image.Point]color.Color),
+	}
+}
+
+func (t *TestImage) ColorModel() color.Model {
+	return color.RGBAModel
+}
+
+func (t *TestImage) Bounds() image.Rectangle {
+	return t.bounds
+}
+
+func (t *TestImage) At(x, y int) color.Color {
+	if c, ok := t.pixels[image.Point{x, y}]; ok {
+		return c
+	}
+	return color.RGBA{0, 0, 0, 255} // Default to black
+}
+
+func (t *TestImage) Set(x, y int, c color.Color) {
+	t.pixels[image.Point{x, y}] = c
+}
+
+func TestDisplay_ShowImage_SmallImage(t *testing.T) {
+	mock := NewTrackedFakeSSD1306()
+	display, err := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock).Build()
+	assertNoError(t, err)
+
+	if err := display.Init(); err != nil {
+		t.Fatalf("Failed to initialize display: %v", err)
+	}
+
+	// Create a small test image (smaller than display bounds)
+	displayBounds := mock.Bounds()
+	smallImage := NewTestImage(displayBounds.Dx()/2, displayBounds.Dy()/2)
+
+	// Set some white pixels
+	smallImage.Set(0, 0, color.RGBA{255, 255, 255, 255})
+	smallImage.Set(1, 1, color.RGBA{255, 255, 255, 255})
+
+	err = display.ShowImage(smallImage)
+	assertNoError(t, err)
+	assertMethodCalled(t, mock, "Draw")
+}
+
+func TestDisplay_ShowImage_LargeImageCropped(t *testing.T) {
+	mock := NewTrackedFakeSSD1306()
+	display, err := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock).Build()
+	assertNoError(t, err)
+
+	if err := display.Init(); err != nil {
+		t.Fatalf("Failed to initialize display: %v", err)
+	}
+
+	// Create a large test image (larger than display bounds)
+	displayBounds := mock.Bounds()
+	largeImage := NewTestImage(displayBounds.Dx()*2, displayBounds.Dy()*2)
+
+	// Set different colored pixels in different quadrants
+	// Upper left (should be visible after cropping)
+	largeImage.Set(0, 0, color.RGBA{255, 255, 255, 255}) // White
+	largeImage.Set(1, 0, color.RGBA{255, 255, 255, 255}) // White
+
+	// Upper right (should be cropped out)
+	largeImage.Set(displayBounds.Dx()+10, 0, color.RGBA{255, 0, 0, 255}) // Red
+
+	// Lower left (should be cropped out)
+	largeImage.Set(0, displayBounds.Dy()+10, color.RGBA{0, 255, 0, 255}) // Green
+
+	// This should not return an error anymore - large images should be cropped
+	err = display.ShowImage(largeImage)
+	assertNoError(t, err)
+	assertMethodCalled(t, mock, "Draw")
+}
+
+func TestDisplay_ShowImage_ExactSizeImage(t *testing.T) {
+	mock := NewTrackedFakeSSD1306()
+	display, err := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock).Build()
+	assertNoError(t, err)
+
+	if err := display.Init(); err != nil {
+		t.Fatalf("Failed to initialize display: %v", err)
+	}
+
+	// Create an image exactly the size of the display
+	displayBounds := mock.Bounds()
+	exactImage := NewTestImage(displayBounds.Dx(), displayBounds.Dy())
+
+	// Fill with a pattern
+	for y := 0; y < displayBounds.Dy(); y++ {
+		for x := 0; x < displayBounds.Dx(); x++ {
+			if (x+y)%2 == 0 {
+				exactImage.Set(x, y, color.RGBA{255, 255, 255, 255}) // White
+			}
+		}
+	}
+
+	err = display.ShowImage(exactImage)
+	assertNoError(t, err)
+	assertMethodCalled(t, mock, "Draw")
+}
+
+func TestDisplay_ShowImage_WithoutInit(t *testing.T) {
+	mock := NewTrackedFakeSSD1306()
+	display, err := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock).Build()
+	assertNoError(t, err)
+
+	// Don't initialize the display
+	testImage := NewTestImage(10, 10)
+
+	err = display.ShowImage(testImage)
+	assertError(t, err, "driver has not been initialized")
+
+	// Verify no draw was called
+	if mock.WasCalled("Draw") {
+		t.Error("Expected Draw not to be called when display not initialized")
+	}
+}
+
+func TestDisplay_ShowImage_DrawError(t *testing.T) {
+	mock := NewTrackedFakeSSD1306()
+	mock.ErrorOnDraw = true
+
+	display, err := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock).Build()
+	assertNoError(t, err)
+
+	if err := display.Init(); err != nil {
+		t.Fatalf("Failed to initialize display: %v", err)
+	}
+
+	testImage := NewTestImage(10, 10)
+
+	err = display.ShowImage(testImage)
+	assertError(t, err, "failed to draw image on display")
+	assertMethodCalled(t, mock, "Draw")
+}
+
+func TestDisplay_ShowImageFromFile_Integration(t *testing.T) {
+	// This test just verifies that ShowImageFromFile calls ShowImage
+	// We can't easily test file operations without creating temporary files
+	mock := NewTrackedFakeSSD1306()
+	display, err := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock).Build()
+	assertNoError(t, err)
+
+	if err := display.Init(); err != nil {
+		t.Fatalf("Failed to initialize display: %v", err)
+	}
+
+	// Test with non-existent file should return appropriate error
+	err = display.ShowImageFromFile("/nonexistent/file.png")
+	assertError(t, err, "failed to open image file")
+
+	// Verify no draw was called due to file error
+	if mock.WasCalled("Draw") {
+		t.Error("Expected Draw not to be called when file cannot be opened")
+	}
 }
 
 func TestDisplay_SetFont(t *testing.T) {

@@ -87,7 +87,7 @@ func (d *FakeSSD1306) Close() error {
 	if d.server != nil {
 		// Clear clients map without closing channels to avoid panic
 		d.clients = make(map[chan string]bool)
-		
+
 		// Force close the server immediately - don't wait for graceful shutdown
 		err := d.server.Close()
 		d.server = nil

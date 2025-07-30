@@ -164,17 +164,16 @@ func (d *Display) ShowImage(img image.Image) error {
 		return fmt.Errorf("driver has not been initialized")
 	}
 
-	if err := d.validateImageForDisplay(img); err != nil {
-		return fmt.Errorf("image validation failed: %w", err)
-	}
-
 	bounds := d.driver.Bounds()
 	displayImg := image1bit.NewVerticalLSB(bounds)
 
+	imgBounds := img.Bounds()
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			if x < img.Bounds().Max.X && y < img.Bounds().Max.Y {
-				c := img.At(x, y)
+			srcX := imgBounds.Min.X + x
+			srcY := imgBounds.Min.Y + y
+			if srcX < imgBounds.Max.X && srcY < imgBounds.Max.Y {
+				c := img.At(srcX, srcY)
 				gray := color.GrayModel.Convert(c).(color.Gray)
 				if gray.Y > 128 {
 					displayImg.Set(x, y, image1bit.On)
@@ -205,20 +204,4 @@ func (d *Display) ShowImageFromFile(filename string) error {
 	}
 
 	return d.ShowImage(img)
-}
-
-func (d *Display) validateImageForDisplay(img image.Image) error {
-	bounds := img.Bounds()
-	width := bounds.Dx()
-	height := bounds.Dy()
-
-	displayBounds := d.driver.Bounds()
-	displayWidth := displayBounds.Dx()
-	displayHeight := displayBounds.Dy()
-
-	if width > displayWidth || height > displayHeight {
-		return fmt.Errorf("image dimensions (%dx%d) exceed display dimensions (%dx%d)", width, height, displayWidth, displayHeight)
-	}
-
-	return nil
 }
