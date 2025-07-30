@@ -81,6 +81,7 @@ func main() {
 		// This gives time to open browser and see the result
 		shouldBlock := true
 		fakeDriver.SetBlocking(shouldBlock)
+		fakeDriver.SetWaitMode(true)
 		driver = fakeDriver
 	}
 
@@ -120,6 +121,13 @@ func main() {
 
 	if options.Clear {
 		d.Clear() //nolint:errcheck
+	}
+
+	// If using fake driver in wait mode, wait for start signal
+	if fakeDriver != nil && fakeDriver.IsWaitMode() {
+		log.Println("Waiting for start button click in browser...")
+		fakeDriver.WaitForStart()
+		log.Println("Start button clicked, beginning rendering...")
 	}
 
 	if options.Image {

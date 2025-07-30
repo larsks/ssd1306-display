@@ -20,20 +20,24 @@ import (
 var displayTemplate embed.FS
 
 type FakeSSD1306 struct {
-	bounds   image.Rectangle
-	mutex    sync.Mutex
-	buffer   *image.RGBA
-	server   *http.Server
-	port     string
-	clients  map[chan string]bool
-	blocking bool
+	bounds    image.Rectangle
+	mutex     sync.Mutex
+	buffer    *image.RGBA
+	server    *http.Server
+	port      string
+	clients   map[chan string]bool
+	blocking  bool
+	waitMode  bool
+	startChan chan bool
+	started   bool
 }
 
 func NewFakeSSD1306() *FakeSSD1306 {
 	return &FakeSSD1306{
-		bounds:  image.Rect(0, 0, 128, 64),
-		port:    "8080",
-		clients: make(map[chan string]bool),
+		bounds:    image.Rect(0, 0, 128, 64),
+		port:      "8080",
+		clients:   make(map[chan string]bool),
+		startChan: make(chan bool, 1),
 	}
 }
 
@@ -43,6 +47,21 @@ func (d *FakeSSD1306) SetBlocking(blocking bool) {
 
 func (d *FakeSSD1306) IsBlocking() bool {
 	return d.blocking
+}
+
+func (d *FakeSSD1306) SetWaitMode(waitMode bool) {
+	d.waitMode = waitMode
+}
+
+func (d *FakeSSD1306) IsWaitMode() bool {
+	return d.waitMode
+}
+
+func (d *FakeSSD1306) WaitForStart() {
+	if d.waitMode && !d.started {
+		<-d.startChan
+		d.started = true
+	}
 }
 
 func (d *FakeSSD1306) Open() error {
@@ -63,6 +82,7 @@ func (d *FakeSSD1306) Open() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", d.handleDisplay)
 	mux.HandleFunc("/events", d.handleSSE)
+	mux.HandleFunc("/start", d.handleStart)
 
 	d.server = &http.Server{
 		Addr:    ":" + d.port,
@@ -152,7 +172,25 @@ func (d *FakeSSD1306) notifyClients() {
 	// Send to all connected clients
 	for client := range d.clients {
 		select {
-		case client <- b64:
+		case client <- "image:" + b64:
+		default:
+			// Client channel is full or closed, remove it
+			close(client)
+			delete(d.clients, client)
+		}
+	}
+}
+
+func (d *FakeSSD1306) notifyStatus() {
+	status := "waiting"
+	if d.started {
+		status = "started"
+	}
+
+	// Send status to all connected clients
+	for client := range d.clients {
+		select {
+		case client <- "status:" + status:
 		default:
 			// Client channel is full or closed, remove it
 			close(client)
@@ -214,13 +252,21 @@ func (d *FakeSSD1306) handleSSE(w http.ResponseWriter, r *http.Request) {
 	d.clients[clientChan] = true
 	d.mutex.Unlock()
 
-	// Send initial image
+	// Send initial status and image
 	d.mutex.Lock()
+	// Send initial status
+	status := "waiting"
+	if d.started {
+		status = "started"
+	}
+	clientChan <- "status:" + status
+
+	// Send initial image
 	var buf bytes.Buffer
 	if d.buffer != nil {
 		if err := png.Encode(&buf, d.buffer); err == nil {
 			b64 := base64.StdEncoding.EncodeToString(buf.Bytes())
-			clientChan <- b64
+			clientChan <- "image:" + b64
 		}
 	}
 	d.mutex.Unlock()
@@ -247,5 +293,34 @@ func (d *FakeSSD1306) handleSSE(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		}
+	}
+}
+
+func (d *FakeSSD1306) handleStart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+
+	if d.started {
+		w.WriteHeader(http.StatusConflict)
+		w.Write([]byte("Already started"))
+		return
+	}
+
+	// Signal that start button was clicked
+	select {
+	case d.startChan <- true:
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Started"))
+		// Notify all clients of status change
+		go d.notifyStatus()
+	default:
+		// Channel is full
+		w.WriteHeader(http.StatusConflict)
+		w.Write([]byte("Start signal already sent"))
 	}
 }
