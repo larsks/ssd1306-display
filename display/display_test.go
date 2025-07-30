@@ -3,9 +3,11 @@ package display
 import (
 	"fmt"
 	"image"
-	"os"
 	"strings"
 	"testing"
+
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/basicfont"
 )
 
 // Call represents a method call on the mock
@@ -137,7 +139,8 @@ func TestNewDisplay(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			display := NewDisplay().WithBusName(tt.busName).WithDriver(tt.dev)
+			display, err := NewDisplay().WithBusName(tt.busName).WithDriver(tt.dev).Build()
+			assertNoError(t, err)
 			_ = display.Init()
 
 			if display == nil {
@@ -163,19 +166,64 @@ func TestNewDisplay(t *testing.T) {
 	}
 }
 
-func TestDisplay_WithBufferFile(t *testing.T) {
-	fake := NewFakeSSD1306()
-	display := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(fake)
-
-	bufferFile := "/tmp/test_buffer.txt"
-	result := display.WithBufferFile(bufferFile)
-
-	if result != display {
-		t.Error("WithBufferFile should return the same display instance")
+func TestDisplay_WithFont(t *testing.T) {
+	tests := []struct {
+		name         string
+		font         font.Face
+		expectHeight int
+	}{
+		{
+			name:         "with basicfont Face7x13",
+			font:         basicfont.Face7x13,
+			expectHeight: basicfont.Face7x13.Metrics().Height.Ceil(),
+		},
 	}
 
-	if display.bufferFile != bufferFile {
-		t.Errorf("Expected bufferFile to be %s, got %s", bufferFile, display.bufferFile)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			display := NewDisplay().WithFont(tt.font)
+
+			if display.font != tt.font {
+				t.Error("Expected custom font to be set")
+			}
+
+			if display.lineHeight != tt.expectHeight {
+				t.Errorf("Expected lineHeight to be %d, got %d", tt.expectHeight, display.lineHeight)
+			}
+		})
+	}
+}
+
+func TestDisplay_Build_WithDefaultFont(t *testing.T) {
+	display := NewDisplay()
+	built, err := display.Build()
+	assertNoError(t, err)
+
+	// Should have default font set
+	if built.font == nil {
+		t.Error("Expected default font to be set")
+	}
+
+	expectedHeight := basicfont.Face7x13.Metrics().Height.Ceil()
+	if built.lineHeight != expectedHeight {
+		t.Errorf("Expected lineHeight to be %d, got %d", expectedHeight, built.lineHeight)
+	}
+}
+
+func TestDisplay_Build_WithCustomFont(t *testing.T) {
+	customFont := basicfont.Face7x13
+	display := NewDisplay().WithFont(customFont)
+	built, err := display.Build()
+	assertNoError(t, err)
+
+	// Should preserve custom font
+	if built.font != customFont {
+		t.Error("Expected custom font to be preserved")
+	}
+
+	expectedHeight := customFont.Metrics().Height.Ceil()
+	if built.lineHeight != expectedHeight {
+		t.Errorf("Expected lineHeight to be %d, got %d", expectedHeight, built.lineHeight)
 	}
 }
 
@@ -183,7 +231,6 @@ func TestDisplay_Init(t *testing.T) {
 	tests := []struct {
 		name        string
 		setupMock   func(*TrackedFakeSSD1306)
-		bufferFile  string
 		wantError   bool
 		errorSubstr string
 	}{
@@ -202,14 +249,6 @@ func TestDisplay_Init(t *testing.T) {
 			wantError:   true,
 			errorSubstr: "failed to initialize device",
 		},
-		{
-			name: "init with buffer file",
-			setupMock: func(mock *TrackedFakeSSD1306) {
-				// No errors
-			},
-			bufferFile: "/tmp/test_init_buffer.txt",
-			wantError:  false,
-		},
 	}
 
 	for _, tt := range tests {
@@ -217,19 +256,10 @@ func TestDisplay_Init(t *testing.T) {
 			mock := NewTrackedFakeSSD1306()
 			tt.setupMock(mock)
 
-			display := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock)
+			display, err := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock).Build()
+			assertNoError(t, err)
 
-			if tt.bufferFile != "" {
-				display.WithBufferFile(tt.bufferFile)
-				// Create a test buffer file
-				testContent := "Line 1\nLine 2\nLine 3"
-				if err := os.WriteFile(tt.bufferFile, []byte(testContent), 0644); err != nil {
-					t.Fatalf("Failed to create test buffer file: %v", err)
-				}
-				defer os.Remove(tt.bufferFile)
-			}
-
-			err := display.Init()
+			err = display.Init()
 
 			if tt.wantError {
 				assertError(t, err, tt.errorSubstr)
@@ -268,8 +298,9 @@ func TestDisplay_Close(t *testing.T) {
 			mock := NewTrackedFakeSSD1306()
 			mock.ErrorOnClose = tt.shouldError
 
-			display := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock)
-			err := display.Init()
+			display, err := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock).Build()
+			assertNoError(t, err)
+			err = display.Init()
 			assertNoError(t, err)
 
 			err = display.Close()
@@ -287,7 +318,8 @@ func TestDisplay_Close(t *testing.T) {
 
 func TestDisplay_Clear(t *testing.T) {
 	mock := NewTrackedFakeSSD1306()
-	display := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock)
+	display, err := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock).Build()
+	assertNoError(t, err)
 
 	// Initialize the display to set up the buffer
 	if err := display.Init(); err != nil {
@@ -311,7 +343,8 @@ func TestDisplay_Clear(t *testing.T) {
 
 func TestDisplay_PrintLine(t *testing.T) {
 	mock := NewTrackedFakeSSD1306()
-	display := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock)
+	display, err := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock).Build()
+	assertNoError(t, err)
 
 	// Initialize the display
 	if err := display.Init(); err != nil {
@@ -373,7 +406,8 @@ func TestDisplay_PrintLine(t *testing.T) {
 
 func TestDisplay_PrintLines(t *testing.T) {
 	mock := NewTrackedFakeSSD1306()
-	display := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock)
+	display, err := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock).Build()
+	assertNoError(t, err)
 
 	// Initialize the display
 	if err := display.Init(); err != nil {
@@ -452,7 +486,6 @@ func TestDisplay_Update(t *testing.T) {
 	tests := []struct {
 		name           string
 		setupBuffer    func(*Display)
-		bufferFile     string
 		mockShouldErr  bool
 		wantError      bool
 		errorSubstr    string
@@ -464,16 +497,6 @@ func TestDisplay_Update(t *testing.T) {
 				d.buffer[0] = "Line 1"
 				d.buffer[1] = "Line 2"
 			},
-			wantDrawCalled: true,
-			wantError:      false,
-		},
-		{
-			name: "update with buffer file",
-			setupBuffer: func(d *Display) {
-				d.buffer[0] = "File Line 1"
-				d.buffer[1] = "File Line 2"
-			},
-			bufferFile:     "/tmp/test_update_buffer.txt",
 			wantDrawCalled: true,
 			wantError:      false,
 		},
@@ -494,12 +517,8 @@ func TestDisplay_Update(t *testing.T) {
 			mock := NewTrackedFakeSSD1306()
 			mock.ErrorOnDraw = tt.mockShouldErr
 
-			display := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock)
-
-			if tt.bufferFile != "" {
-				display.WithBufferFile(tt.bufferFile)
-				defer os.Remove(tt.bufferFile)
-			}
+			display, err := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock).Build()
+			assertNoError(t, err)
 
 			// Initialize and setup buffer
 			if err := display.Init(); err != nil {
@@ -510,29 +529,12 @@ func TestDisplay_Update(t *testing.T) {
 				tt.setupBuffer(display)
 			}
 
-			err := display.Update()
+			err = display.Update()
 
 			if tt.wantError {
 				assertError(t, err, tt.errorSubstr)
 			} else {
 				assertNoError(t, err)
-
-				// Verify buffer file was written if specified
-				if tt.bufferFile != "" {
-					if _, err := os.Stat(tt.bufferFile); os.IsNotExist(err) {
-						t.Error("Expected buffer file to be created")
-					} else {
-						content, err := os.ReadFile(tt.bufferFile)
-						if err != nil {
-							t.Errorf("Failed to read buffer file: %v", err)
-						} else {
-							expectedContent := strings.Join(display.buffer, "\n")
-							if string(content) != expectedContent {
-								t.Errorf("Expected buffer file content %q, got %q", expectedContent, string(content))
-							}
-						}
-					}
-				}
 			}
 
 			if tt.wantDrawCalled {
@@ -547,38 +549,10 @@ func TestDisplay_Update(t *testing.T) {
 	}
 }
 
-func TestDisplay_UpdateFromFile(t *testing.T) {
-	mock := NewTrackedFakeSSD1306()
-	display := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock)
-
-	// Test with buffer file
-	bufferFile := "/tmp/test_update_from_file.txt"
-	display.WithBufferFile(bufferFile)
-	defer os.Remove(bufferFile)
-
-	// Create test content
-	testContent := "File Line 1\nFile Line 2\nFile Line 3\nFile Line 4\nFile Line 5\nExtra Line"
-	if err := os.WriteFile(bufferFile, []byte(testContent), 0644); err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
-
-	// Initialize display
-	if err := display.Init(); err != nil {
-		t.Fatalf("Failed to initialize display: %v", err)
-	}
-
-	// Verify content was loaded correctly (should be truncated to display.lines)
-	expectedLines := []string{"File Line 1", "File Line 2", "File Line 3", "File Line 4", "File Line 5"}
-	for i, expected := range expectedLines {
-		if i < len(display.buffer) && display.buffer[i] != expected {
-			t.Errorf("Expected buffer[%d] to be %q, got %q", i, expected, display.buffer[i])
-		}
-	}
-}
-
 func TestDisplay_MethodsFailWithoutInit(t *testing.T) {
 	mock := NewTrackedFakeSSD1306()
-	display := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock)
+	display, err := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock).Build()
+	assertNoError(t, err)
 
 	// Test that all methods fail when Init() hasn't been called
 	tests := []struct {
@@ -632,11 +606,8 @@ func TestDisplay_MethodsFailWithoutInit(t *testing.T) {
 func TestDisplay_Integration(t *testing.T) {
 	// Integration test that exercises the full workflow
 	mock := NewTrackedFakeSSD1306()
-	display := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock)
-
-	bufferFile := "/tmp/test_integration.txt"
-	display.WithBufferFile(bufferFile)
-	defer os.Remove(bufferFile)
+	display, err := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock).Build()
+	assertNoError(t, err)
 
 	// Initialize
 	if err := display.Init(); err != nil {
@@ -665,11 +636,6 @@ func TestDisplay_Integration(t *testing.T) {
 		t.Errorf("Expected Draw to be called once, got %d times", mock.CallCount("Draw"))
 	}
 
-	// Verify buffer file was written
-	if _, err := os.Stat(bufferFile); os.IsNotExist(err) {
-		t.Error("Expected buffer file to be created")
-	}
-
 	// Clear and verify
 	display.Clear()
 	for i, line := range display.buffer {
@@ -684,4 +650,44 @@ func TestDisplay_Integration(t *testing.T) {
 	}
 
 	assertMethodCalled(t, mock, "Close")
+}
+
+func TestDisplay_FontIntegration(t *testing.T) {
+	// Integration test that verifies font handling throughout the workflow
+	mock := NewTrackedFakeSSD1306()
+
+	// Test with custom font
+	customFont := basicfont.Face7x13
+	display, err := NewDisplay().
+		WithBusName("/dev/i2c-0").
+		WithDriver(mock).
+		WithFont(customFont).
+		Build()
+	assertNoError(t, err)
+
+	// Verify font is set correctly
+	if display.font != customFont {
+		t.Error("Expected custom font to be preserved")
+	}
+
+	expectedHeight := customFont.Metrics().Height.Ceil()
+	if display.lineHeight != expectedHeight {
+		t.Errorf("Expected lineHeight to be %d, got %d", expectedHeight, display.lineHeight)
+	}
+
+	// Initialize and use the display
+	if err := display.Init(); err != nil {
+		t.Fatalf("Failed to initialize: %v", err)
+	}
+
+	if err := display.PrintLine(0, "Font Test"); err != nil {
+		t.Fatalf("Failed to print line: %v", err)
+	}
+
+	if err := display.Update(); err != nil {
+		t.Fatalf("Failed to update: %v", err)
+	}
+
+	// Verify draw was called
+	assertMethodCalled(t, mock, "Draw")
 }
