@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/larsks/display1306/internal/fakedriver"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
 )
@@ -18,7 +19,7 @@ type Call struct {
 
 // Enhanced FakeSSD1306 for testing with call tracking
 type TrackedFakeSSD1306 struct {
-	*FakeSSD1306
+	*fakedriver.FakeSSD1306
 	Calls        []Call
 	ErrorOnOpen  bool
 	ErrorOnClose bool
@@ -27,7 +28,7 @@ type TrackedFakeSSD1306 struct {
 
 func NewTrackedFakeSSD1306() *TrackedFakeSSD1306 {
 	return &TrackedFakeSSD1306{
-		FakeSSD1306: NewFakeSSD1306(),
+		FakeSSD1306: fakedriver.NewFakeSSD1306(),
 		Calls:       make([]Call, 0),
 	}
 }
@@ -126,7 +127,7 @@ func TestNewDisplay(t *testing.T) {
 		{
 			name:    "with provided fake device",
 			busName: "/dev/i2c-0",
-			dev:     NewFakeSSD1306(),
+			dev:     fakedriver.NewFakeSSD1306(),
 			wantDev: true,
 		},
 		{

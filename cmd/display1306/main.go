@@ -4,10 +4,13 @@ import (
 	"bufio"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/golang/freetype/truetype"
 	"github.com/larsks/display1306/display"
+	"github.com/larsks/display1306/internal/fakedriver"
 	"github.com/spf13/pflag"
 )
 
@@ -71,8 +74,14 @@ func main() {
 	}
 
 	var driver display.SSD1306
+	var fakeDriver *fakedriver.FakeSSD1306
 	if options.DryRun {
-		driver = display.NewFakeSSD1306()
+		fakeDriver = fakedriver.NewFakeSSD1306()
+		// In dry-run mode, always block so user can view the display
+		// This gives time to open browser and see the result
+		shouldBlock := true
+		fakeDriver.SetBlocking(shouldBlock)
+		driver = fakeDriver
 	}
 
 	// Initialize display
@@ -120,6 +129,7 @@ func main() {
 			startTime = time.Now()
 		}
 
+	outer:
 		for {
 			for _, imagePath := range args {
 				if err := d.ShowImageFromFile(imagePath); err != nil {
@@ -131,7 +141,7 @@ func main() {
 
 				// Check duration limit if looping
 				if options.Loop && options.Duration > 0 && time.Since(startTime) >= options.Duration {
-					return
+					break outer
 				}
 			}
 			if !options.Loop {
@@ -150,5 +160,21 @@ func main() {
 		if err := d.Update(); err != nil {
 			log.Fatal(err)
 		}
+	}
+
+	// If using fake driver in blocking mode, wait for interrupt
+	if fakeDriver != nil && fakeDriver.IsBlocking() {
+		log.Println("Press Ctrl+C to exit...")
+
+		// Set up signal handling
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+		// Wait for signal
+		<-sigChan
+		log.Println("Shutting down...")
+
+		// Explicitly close the display to shut down the HTTP server
+		d.Close() //nolint:errcheck
 	}
 }

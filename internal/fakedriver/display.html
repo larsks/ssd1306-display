@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SSD1306 Display Simulator</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: white;
+            font-family: monospace;
+            text-align: center;
+        }
+        .display {
+            border: 2px solid #333;
+            border-radius: 10px;
+            padding: 10px;
+            background-color: #000;
+            display: inline-block;
+            margin: 20px;
+        }
+        .screen {
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+            width: 512px;
+            height: 256px;
+        }
+        .info {
+            margin-bottom: 20px;
+        }
+        .status {
+            color: #4CAF50;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="info">
+        <h1>SSD1306 Display Simulator</h1>
+        <p>128x64 OLED Display (4x scaled)</p>
+        <p class="status" id="status">Connecting to real-time updates...</p>
+    </div>
+    <div class="display">
+        <img src="data:image/png;base64,{{.ImageData}}" alt="SSD1306 Display" class="screen" id="screen">
+    </div>
+    <script>
+        const eventSource = new EventSource('/events');
+        const screen = document.getElementById('screen');
+        const status = document.getElementById('status');
+        
+        eventSource.onopen = function() {
+            status.textContent = 'Connected - Real-time updates active';
+            status.style.color = '#4CAF50';
+        };
+        
+        eventSource.onmessage = function(event) {
+            screen.src = 'data:image/png;base64,' + event.data;
+        };
+        
+        eventSource.onerror = function() {
+            status.textContent = 'Connection error - Trying to reconnect...';
+            status.style.color = '#f44336';
+        };
+    </script>
+</body>
+</html>

@@ -197,7 +197,7 @@ func (d *Display) ShowImageFromFile(filename string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open image file: %w", err)
 	}
-	defer file.Close()
+	defer file.Close() //nolint:errcheck
 
 	img, _, err := image.Decode(file)
 	if err != nil {

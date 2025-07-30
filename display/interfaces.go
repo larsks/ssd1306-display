@@ -24,35 +24,12 @@ type (
 		bus     i2c.BusCloser
 		dev     *ssd1306.Dev
 	}
-
-	FakeSSD1306 struct {
-	}
 )
 
 func NewRealSSD1306(busName string) *RealSSD1306 {
 	return &RealSSD1306{
 		busName: busName,
 	}
-}
-
-func NewFakeSSD1306() *FakeSSD1306 {
-	return &FakeSSD1306{}
-}
-
-func (d *FakeSSD1306) Open() error {
-	return nil
-}
-
-func (d *FakeSSD1306) Close() error {
-	return nil
-}
-
-func (d *FakeSSD1306) Bounds() image.Rectangle {
-	return image.Rect(0, 0, 100, 100)
-}
-
-func (d *FakeSSD1306) Draw(r image.Rectangle, src image.Image, sp image.Point) error {
-	return nil
 }
 
 func (d *RealSSD1306) Open() error {

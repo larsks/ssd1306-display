@@ -9,6 +9,7 @@ require (
 	periph.io/x/host/v3 v3.8.5
 )
 
-require github.com/spf13/pflag v1.0.6
-
-require github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
+require (
+	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
+	github.com/spf13/pflag v1.0.6
+)
