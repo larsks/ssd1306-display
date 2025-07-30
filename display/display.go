@@ -99,7 +99,7 @@ func (d *Display) Clear() error {
 	for i := range d.buffer {
 		d.buffer[i] = ""
 	}
-	return nil
+	return d.Update()
 }
 
 func (d *Display) PrintLine(line uint, text string) error {

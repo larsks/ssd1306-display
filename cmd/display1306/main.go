@@ -2,8 +2,10 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/golang/freetype/truetype"
@@ -30,6 +32,47 @@ type (
 var (
 	options Options
 )
+
+func processCommand(command string, d *display.Display) (bool, error) {
+	if command[0] != '@' {
+		return false, nil
+	}
+
+	parts := strings.Split(command[1:], "=")
+	skip := false
+
+	switch parts[0] {
+	case "clear":
+		if err := d.Clear(); err != nil {
+			return false, fmt.Errorf("failed to clear display: %v", err)
+		}
+	case "interval":
+		skip = true
+		if len(parts) != 2 {
+			return false, fmt.Errorf("@interval requires a value: @interval=duration")
+		}
+		interval, err := time.ParseDuration(parts[1])
+		if err != nil {
+			return false, fmt.Errorf("invalid interval duration '%s': %v", parts[1], err)
+		}
+		options.ImageInterval = interval
+		log.Printf("Updated image interval to %v", options.ImageInterval)
+	case "pause":
+		skip = true
+		if len(parts) != 2 {
+			return false, fmt.Errorf("@pause requires a value: @pause=duration")
+		}
+		pauseDuration, err := time.ParseDuration(parts[1])
+		if err != nil {
+			return false, fmt.Errorf("invalid pause duration '%s': %v", parts[1], err)
+		}
+		log.Printf("Pausing for %v", pauseDuration)
+		time.Sleep(pauseDuration)
+	default:
+		return false, fmt.Errorf("unknown command: %s", command)
+	}
+	return skip, nil
+}
 
 func init() {
 	pflag.StringVarP(&options.Device, "device", "d", "/dev/i2c-1", "path to i2c device")
@@ -134,9 +177,20 @@ func main() {
 	outer:
 		for {
 			for _, imagePath := range args {
-				if err := d.ShowImageFromFile(imagePath); err != nil {
-					log.Fatalf("failed to display image %s: %v", imagePath, err)
+				if imagePath[0] == '@' {
+					skip, err := processCommand(imagePath, d)
+					if err != nil {
+						log.Fatalf("failed to process command '%s': %v", imagePath, err)
+					}
+					if skip {
+						continue
+					}
+				} else {
+					if err := d.ShowImageFromFile(imagePath); err != nil {
+						log.Fatalf("failed to display image %s: %v", imagePath, err)
+					}
 				}
+
 				if len(args) > 1 {
 					time.Sleep(options.ImageInterval)
 				}
