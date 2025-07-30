@@ -26,7 +26,6 @@ type FakeSSD1306 struct {
 	server    *http.Server
 	port      string
 	clients   map[chan string]bool
-	blocking  bool
 	waitMode  bool
 	startChan chan bool
 	started   bool
@@ -39,14 +38,6 @@ func NewFakeSSD1306() *FakeSSD1306 {
 		clients:   make(map[chan string]bool),
 		startChan: make(chan bool, 1),
 	}
-}
-
-func (d *FakeSSD1306) SetBlocking(blocking bool) {
-	d.blocking = blocking
-}
-
-func (d *FakeSSD1306) IsBlocking() bool {
-	return d.blocking
 }
 
 func (d *FakeSSD1306) SetWaitMode(waitMode bool) {

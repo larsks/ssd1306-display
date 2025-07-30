@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"log"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/golang/freetype/truetype"
@@ -77,10 +75,6 @@ func main() {
 	var fakeDriver *fakedriver.FakeSSD1306
 	if options.DryRun {
 		fakeDriver = fakedriver.NewFakeSSD1306()
-		// In dry-run mode, always block so user can view the display
-		// This gives time to open browser and see the result
-		shouldBlock := true
-		fakeDriver.SetBlocking(shouldBlock)
 		fakeDriver.SetWaitMode(true)
 		driver = fakeDriver
 	}
@@ -171,17 +165,7 @@ func main() {
 	}
 
 	// If using fake driver in blocking mode, wait for interrupt
-	if fakeDriver != nil && fakeDriver.IsBlocking() {
-		log.Println("Press Ctrl+C to exit...")
-
-		// Set up signal handling
-		sigChan := make(chan os.Signal, 1)
-		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-		// Wait for signal
-		<-sigChan
-		log.Println("Shutting down...")
-
+	if fakeDriver != nil {
 		// Explicitly close the display to shut down the HTTP server
 		d.Close() //nolint:errcheck
 	}
