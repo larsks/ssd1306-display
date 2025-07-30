@@ -147,3 +147,8 @@ func (d *Display) Update() error {
 
 	return nil
 }
+
+func (d *Display) SetFont(f font.Face) {
+	d.font = f
+	d.lineHeight = f.Metrics().Height.Ceil()
+}

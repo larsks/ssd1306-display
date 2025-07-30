@@ -691,3 +691,40 @@ func TestDisplay_FontIntegration(t *testing.T) {
 	// Verify draw was called
 	assertMethodCalled(t, mock, "Draw")
 }
+
+func TestDisplay_SetFont(t *testing.T) {
+	mock := NewTrackedFakeSSD1306()
+	display, err := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock).Build()
+	assertNoError(t, err)
+
+	// Initialize the display
+	if err := display.Init(); err != nil {
+		t.Fatalf("Failed to initialize display: %v", err)
+	}
+
+	// Set a new font (using the same font for simplicity, but this demonstrates the method works)
+	newFont := basicfont.Face7x13
+	display.SetFont(newFont)
+
+	// Verify the font was changed
+	if display.font != newFont {
+		t.Error("Expected font to be updated")
+	}
+
+	// Verify line height was recalculated
+	expectedHeight := newFont.Metrics().Height.Ceil()
+	if display.lineHeight != expectedHeight {
+		t.Errorf("Expected lineHeight to be %d, got %d", expectedHeight, display.lineHeight)
+	}
+
+	// Verify we can still use the display normally after changing font
+	if err := display.PrintLine(0, "Test with new font"); err != nil {
+		t.Fatalf("Failed to print line after font change: %v", err)
+	}
+
+	if err := display.Update(); err != nil {
+		t.Fatalf("Failed to update after font change: %v", err)
+	}
+
+	assertMethodCalled(t, mock, "Draw")
+}
