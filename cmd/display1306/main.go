@@ -11,11 +11,10 @@ import (
 
 type (
 	Options struct {
-		Device     string
-		Line       uint
-		BufferFile string
-		Clear      bool
-		DryRun     bool
+		Device string
+		Line   uint
+		Clear  bool
+		DryRun bool
 	}
 )
 
@@ -26,7 +25,6 @@ var (
 func init() {
 	pflag.StringVarP(&options.Device, "device", "d", "/dev/i2c-1", "path to i2c device")
 	pflag.UintVarP(&options.Line, "line", "l", 1, "line number to start printing (1-based)")
-	pflag.StringVarP(&options.BufferFile, "buffer", "b", "", "path to buffer file for persistent display state")
 	pflag.BoolVarP(&options.Clear, "clear", "k", false, "clear the display and buffer")
 	pflag.BoolVarP(&options.DryRun, "dry-run", "n", false, "run without actual hardware")
 }
@@ -58,7 +56,6 @@ func main() {
 
 	// Initialize display
 	d := display.NewDisplay().
-		WithBufferFile(options.BufferFile).
 		WithBusName(options.Device).
 		WithDriver(driver)
 	defer d.Close() //nolint:errcheck
