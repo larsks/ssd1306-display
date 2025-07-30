@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Run tests
+        run: make test
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+          - goos: linux
+            goarch: arm
+            goarm: "6"
+            suffix: linux-armv6
+          - goos: linux
+            goarch: arm
+            goarm: "7"
+            suffix: linux-armv7
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Determine version
+        id: semver
+        uses: ietf-tools/semver-action@v1
+        with:
+          token: ${{ github.token }}
+          branch: main
+
+      - name: Build binary
+        env:
+          CGO_ENABLED: 0
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          VERSION: ${{ steps.semver.outputs.next }}
+        run: |
+          make BINARY_NAME=display1306-${{ matrix.suffix }}${{ matrix.ext }} build
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: display1306-${{ matrix.suffix }}
+          path: display1306-${{ matrix.suffix }}${{ matrix.ext }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: semver
+        uses: ietf-tools/semver-action@v1
+        with:
+          token: ${{ github.token }}
+          branch: main
+          fallbackTag: v0.0.0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Move artifacts to root
+        run: |
+          find artifacts -type f -name "display1306-*" -exec mv {} . \;
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.semver.outputs.next }}
+          name: Release ${{ steps.semver.outputs.next }}
+          draft: false
+          prerelease: false
+          files: |
+            display1306-linux-amd64
+            display1306-linux-arm64
+            display1306-linux-armv7
+          body: |
+            ## Changes
+            
+            Automatically generated release for commit ${{ github.sha }}
+            
+            ## Installation
+            
+            Download the appropriate binary for your platform and make it executable:
+            
+            ```bash
+            # Linux x64
+            wget https://github.com/${{ github.repository }}/releases/download/${{ steps.semver.outputs.next }}/display1306-linux-amd64
+            chmod +x display1306-linux-amd64
+            sudo mv display1306-linux-amd64 /usr/local/bin/display1306
+
+            # Linux Arm64
+            wget https://github.com/${{ github.repository }}/releases/download/${{ steps.semver.outputs.next }}/display1306-linux-arm64
+            chmod +x display1306-linux-arm64
+            sudo mv display1306-linux-arm64 /usr/local/bin/display1306
+
+            # Linux Arm v7
+            wget https://github.com/${{ github.repository }}/releases/download/${{ steps.semver.outputs.next }}/display1306-linux-armv7
+            chmod +x display1306-linux-armv7
+            sudo mv display1306-linux-armv7 /usr/local/bin/display1306
+            ```
