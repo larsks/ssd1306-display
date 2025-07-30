@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"log"
 	"os"
+	"time"
 
 	"github.com/golang/freetype/truetype"
 	"github.com/larsks/display1306/display"
@@ -12,12 +13,16 @@ import (
 
 type (
 	Options struct {
-		Device   string
-		Line     uint
-		Clear    bool
-		DryRun   bool
-		Font     string
-		FontSize float64
+		Device        string
+		Line          uint
+		Clear         bool
+		DryRun        bool
+		Font          string
+		FontSize      float64
+		Image         bool
+		ImageInterval time.Duration
+		Loop          bool
+		Duration      time.Duration
 	}
 )
 
@@ -30,27 +35,38 @@ func init() {
 	pflag.UintVarP(&options.Line, "line", "l", 1, "line number to start printing (1-based)")
 	pflag.BoolVarP(&options.Clear, "clear", "k", false, "clear the display and buffer")
 	pflag.BoolVarP(&options.DryRun, "dry-run", "n", false, "run without actual hardware")
-	pflag.StringVar(&options.Font, "font", "", "path to truetype font file")
-	pflag.Float64Var(&options.FontSize, "font-size", 13.0, "font size in points (ignored if --font not provided)")
+	pflag.StringVarP(&options.Font, "font", "f", "", "path to truetype font file")
+	pflag.Float64VarP(&options.FontSize, "font-size", "s", 13.0, "font size in points (ignored if --font not provided)")
+	pflag.BoolVarP(&options.Image, "image", "i", false, "interpret non-option arguments as image filenames")
+	pflag.DurationVar(&options.ImageInterval, "image-interval", 30*time.Millisecond, "interval between images")
+	pflag.BoolVar(&options.Loop, "loop", false, "loop through images continuously")
+	pflag.DurationVar(&options.Duration, "duration", 0, "maximum duration to run loop (0 for unlimited)")
 }
 
 func main() {
 	pflag.Parse()
 	args := pflag.Args()
 
+	// Validate arguments when using --image
+	if options.Image && len(args) == 0 {
+		log.Fatalf("--image requires at least one image filename as argument")
+	}
+
 	// Get text to display
 	// This has to happen before calling d.Init(), otherwise we get errors
 	// reading from stdin.
 	var lines []string
-	if len(args) > 0 {
-		lines = args
-	} else {
-		scanner := bufio.NewScanner(os.Stdin)
-		for scanner.Scan() {
-			lines = append(lines, scanner.Text())
-		}
-		if err := scanner.Err(); err != nil {
-			log.Fatalf("error reading stdin: %v", err)
+	if !options.Image {
+		if len(args) > 0 {
+			lines = args
+		} else {
+			scanner := bufio.NewScanner(os.Stdin)
+			for scanner.Scan() {
+				lines = append(lines, scanner.Text())
+			}
+			if err := scanner.Err(); err != nil {
+				log.Fatalf("error reading stdin: %v", err)
+			}
 		}
 	}
 
@@ -97,15 +113,42 @@ func main() {
 		d.Clear() //nolint:errcheck
 	}
 
-	// Update display with new text
-	if len(lines) > 0 {
-		if err := d.PrintLines(options.Line-1, lines); err != nil {
-			log.Fatalf("failed to print lines: %v", err)
+	if options.Image {
+		// Display images in sequence
+		var startTime time.Time
+		if options.Loop && options.Duration > 0 {
+			startTime = time.Now()
 		}
-	}
 
-	// Update the display
-	if err := d.Update(); err != nil {
-		log.Fatal(err)
+		for {
+			for _, imagePath := range args {
+				if err := d.ShowImageFromFile(imagePath); err != nil {
+					log.Fatalf("failed to display image %s: %v", imagePath, err)
+				}
+				if len(args) > 1 {
+					time.Sleep(options.ImageInterval)
+				}
+
+				// Check duration limit if looping
+				if options.Loop && options.Duration > 0 && time.Since(startTime) >= options.Duration {
+					return
+				}
+			}
+			if !options.Loop {
+				break
+			}
+		}
+	} else {
+		// Update display with new text
+		if len(lines) > 0 {
+			if err := d.PrintLines(options.Line-1, lines); err != nil {
+				log.Fatalf("failed to print lines: %v", err)
+			}
+		}
+
+		// Update the display
+		if err := d.Update(); err != nil {
+			log.Fatal(err)
+		}
 	}
 }

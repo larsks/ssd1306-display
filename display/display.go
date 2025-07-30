@@ -3,7 +3,13 @@ package display
 import (
 	"fmt"
 	"image"
+	"image/color"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+	"os"
 
+	_ "golang.org/x/image/bmp"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
 	"golang.org/x/image/math/fixed"
@@ -151,4 +157,68 @@ func (d *Display) Update() error {
 func (d *Display) SetFont(f font.Face) {
 	d.font = f
 	d.lineHeight = f.Metrics().Height.Ceil()
+}
+
+func (d *Display) ShowImage(img image.Image) error {
+	if !d.initialized {
+		return fmt.Errorf("driver has not been initialized")
+	}
+
+	if err := d.validateImageForDisplay(img); err != nil {
+		return fmt.Errorf("image validation failed: %w", err)
+	}
+
+	bounds := d.driver.Bounds()
+	displayImg := image1bit.NewVerticalLSB(bounds)
+
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			if x < img.Bounds().Max.X && y < img.Bounds().Max.Y {
+				c := img.At(x, y)
+				gray := color.GrayModel.Convert(c).(color.Gray)
+				if gray.Y > 128 {
+					displayImg.Set(x, y, image1bit.On)
+				} else {
+					displayImg.Set(x, y, image1bit.Off)
+				}
+			}
+		}
+	}
+
+	if err := d.driver.Draw(bounds, displayImg, image.Point{}); err != nil {
+		return fmt.Errorf("failed to draw image on display: %w", err)
+	}
+
+	return nil
+}
+
+func (d *Display) ShowImageFromFile(filename string) error {
+	file, err := os.Open(filename)
+	if err != nil {
+		return fmt.Errorf("failed to open image file: %w", err)
+	}
+	defer file.Close()
+
+	img, _, err := image.Decode(file)
+	if err != nil {
+		return fmt.Errorf("failed to decode image: %w", err)
+	}
+
+	return d.ShowImage(img)
+}
+
+func (d *Display) validateImageForDisplay(img image.Image) error {
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+
+	displayBounds := d.driver.Bounds()
+	displayWidth := displayBounds.Dx()
+	displayHeight := displayBounds.Dy()
+
+	if width > displayWidth || height > displayHeight {
+		return fmt.Errorf("image dimensions (%dx%d) exceed display dimensions (%dx%d)", width, height, displayWidth, displayHeight)
+	}
+
+	return nil
 }
