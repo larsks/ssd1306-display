@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"io/ioutil"
 	"log"
 	"os"
 
@@ -66,7 +65,7 @@ func main() {
 		WithDriver(driver)
 
 	if options.Font != "" {
-		fontData, err := ioutil.ReadFile(options.Font)
+		fontData, err := os.ReadFile(options.Font)
 		if err != nil {
 			log.Fatalf("failed to read font file: %v", err)
 		}
@@ -95,7 +94,7 @@ func main() {
 	}
 
 	if options.Clear {
-		d.Clear()
+		d.Clear() //nolint:errcheck
 	}
 
 	// Update display with new text
