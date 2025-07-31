@@ -11,6 +11,8 @@ import (
 	"image/png"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"sync"
 
 	"periph.io/x/devices/v3/ssd1306/image1bit"
@@ -20,24 +22,53 @@ import (
 var displayTemplate embed.FS
 
 type FakeSSD1306 struct {
-	bounds    image.Rectangle
-	mutex     sync.Mutex
-	buffer    *image.RGBA
-	server    *http.Server
-	port      string
-	clients   map[chan string]bool
-	waitMode  bool
-	startChan chan bool
-	started   bool
+	bounds        image.Rectangle
+	mutex         sync.Mutex
+	buffer        *image.RGBA
+	server        *http.Server
+	listenAddress string
+	port          uint
+	clients       map[chan string]bool
+	waitMode      bool
+	startChan     chan bool
+	started       bool
+}
+
+func getEnvWithDefault(name, defval string) string {
+	val := os.Getenv(name)
+	if val == "" {
+		return defval
+	}
+	return val
 }
 
 func NewFakeSSD1306() *FakeSSD1306 {
-	return &FakeSSD1306{
-		bounds:    image.Rect(0, 0, 128, 64),
-		port:      "8080",
-		clients:   make(map[chan string]bool),
-		startChan: make(chan bool, 1),
+	listenAddress := getEnvWithDefault("FAKESSD1306_LISTEN_ADDRESS", "127.0.0.1")
+	portStr := getEnvWithDefault("FAKESSD1306_PORT", "8080")
+
+	port, err := strconv.ParseUint(portStr, 10, 32)
+	if err != nil {
+		port = 8080
+		log.Printf("invalid port %s: using default port %d", portStr, port)
 	}
+
+	return &FakeSSD1306{
+		bounds:        image.Rect(0, 0, 128, 64),
+		listenAddress: listenAddress,
+		port:          uint(port),
+		clients:       make(map[chan string]bool),
+		startChan:     make(chan bool, 1),
+	}
+}
+
+func (f *FakeSSD1306) WithPort(port uint) *FakeSSD1306 {
+	f.port = port
+	return f
+}
+
+func (f *FakeSSD1306) WithListenAddress(addr string) *FakeSSD1306 {
+	f.listenAddress = addr
+	return f
 }
 
 func (d *FakeSSD1306) SetWaitMode(waitMode bool) {
@@ -76,13 +107,13 @@ func (d *FakeSSD1306) Open() error {
 	mux.HandleFunc("/start", d.handleStart)
 
 	d.server = &http.Server{
-		Addr:    ":" + d.port,
+		Addr:    fmt.Sprintf("%s:%d", d.listenAddress, d.port),
 		Handler: mux,
 	}
 
 	// Start server in a goroutine
 	go func() {
-		log.Printf("SSD1306 Display Simulator running at http://localhost:%s", d.port)
+		log.Printf("SSD1306 Display Simulator running at http://localhost:%d", d.port)
 		if err := d.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Printf("HTTP server error: %v", err)
 		}
