@@ -94,10 +94,31 @@ func main() {
 	pflag.Parse()
 	args := pflag.Args()
 
-	// Validate arguments when using --image
+	// Validate arguments
 	if options.Image && len(args) == 0 {
 		log.Fatalf("--image requires at least one image filename as argument")
 	}
+
+	pflag.Visit(func(f *pflag.Flag) {
+		switch f.Name {
+		case "loop":
+			if !options.Image {
+				log.Fatalf("--loop can only be used with --image")
+			}
+		case "image-interval":
+			if !options.Image {
+				log.Fatalf("--image-interval can only be used with --image")
+			}
+		case "font-size", "font":
+			if options.Image {
+				log.Fatalf("--font and --font-size cannot be used with --image")
+			}
+		case "wait":
+			if !options.DryRun {
+				log.Fatalf("--wait can only be used with --dry-run")
+			}
+		}
+	})
 
 	// Get text to display
 	// This has to happen before calling d.Init(), otherwise we get errors
@@ -221,7 +242,7 @@ func main() {
 		}
 	}
 
-	if options.Wait {
+	if options.DryRun && options.Wait {
 		log.Printf("paused; press CTRL-C to exit")
 		syscall.Pause() //nolint:errcheck
 	}
