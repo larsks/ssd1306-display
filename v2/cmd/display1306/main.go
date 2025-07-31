@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/golang/freetype/truetype"
@@ -26,6 +27,7 @@ type (
 		ImageInterval time.Duration
 		Loop          bool
 		Duration      time.Duration
+		Wait          bool
 	}
 )
 
@@ -84,6 +86,7 @@ func init() {
 	pflag.BoolVarP(&options.Image, "image", "i", false, "interpret non-option arguments as image filenames")
 	pflag.DurationVar(&options.ImageInterval, "image-interval", 30*time.Millisecond, "interval between images")
 	pflag.BoolVar(&options.Loop, "loop", false, "loop through images continuously")
+	pflag.BoolVar(&options.Wait, "wait", false, "pause and require ctrl-c to exit")
 	pflag.DurationVar(&options.Duration, "duration", 0, "maximum duration to run loop (0 for unlimited)")
 }
 
@@ -216,6 +219,11 @@ func main() {
 		if err := d.Update(); err != nil {
 			log.Fatal(err)
 		}
+	}
+
+	if options.Wait {
+		log.Printf("paused; press CTRL-C to exit")
+		syscall.Pause() //nolint:errcheck
 	}
 
 	// If using fake driver in blocking mode, wait for interrupt
