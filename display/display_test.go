@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/larsks/display1306/internal/fakedriver"
+	"github.com/larsks/display1306/display/fakedriver"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
 )

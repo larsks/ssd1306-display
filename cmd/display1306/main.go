@@ -10,7 +10,7 @@ import (
 
 	"github.com/golang/freetype/truetype"
 	"github.com/larsks/display1306/display"
-	"github.com/larsks/display1306/internal/fakedriver"
+	"github.com/larsks/display1306/display/fakedriver"
 	"github.com/spf13/pflag"
 )
 
