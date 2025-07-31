@@ -144,7 +144,7 @@ func (d *Display) Update() error {
 	}
 
 	for i, textLine := range d.buffer {
-		screen.Dot = fixed.P(0, d.lineHeight*(1+i)) //-d.font.Descent)
+		screen.Dot = fixed.P(0, d.lineHeight*(1+i) - d.font.Metrics().Descent.Round())
 		screen.DrawString(textLine)
 	}
 	if err := d.driver.Draw(d.driver.Bounds(), img, image.Point{}); err != nil {
