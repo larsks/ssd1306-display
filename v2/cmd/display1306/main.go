@@ -43,7 +43,7 @@ func processCommand(command string, d *display.Display) (bool, error) {
 
 	switch parts[0] {
 	case "clear":
-		if err := d.Clear(); err != nil {
+		if err := d.ClearScreen(); err != nil {
 			return false, fmt.Errorf("failed to clear display: %v", err)
 		}
 	case "interval":
@@ -77,7 +77,7 @@ func processCommand(command string, d *display.Display) (bool, error) {
 func init() {
 	pflag.StringVarP(&options.Device, "device", "d", "/dev/i2c-1", "path to i2c device")
 	pflag.UintVarP(&options.Line, "line", "l", 1, "line number to start printing (1-based)")
-	pflag.BoolVarP(&options.Clear, "clear", "k", false, "clear the display and buffer")
+	pflag.BoolVarP(&options.Clear, "clear", "k", false, "clear the display")
 	pflag.BoolVarP(&options.DryRun, "dry-run", "n", false, "run without actual hardware")
 	pflag.StringVarP(&options.Font, "font", "f", "", "path to truetype font file")
 	pflag.Float64VarP(&options.FontSize, "font-size", "s", 13.0, "font size in points (ignored if --font not provided)")
@@ -157,7 +157,7 @@ func main() {
 	}
 
 	if options.Clear {
-		d.Clear() //nolint:errcheck
+		d.ClearScreen() //nolint:errcheck
 	}
 
 	// If using fake driver in wait mode, wait for start signal

@@ -318,7 +318,7 @@ func TestDisplay_Close(t *testing.T) {
 	}
 }
 
-func TestDisplay_Clear(t *testing.T) {
+func TestDisplay_ClearLines(t *testing.T) {
 	mock := NewTrackedFakeSSD1306()
 	display, err := NewDisplay().WithBusName("/dev/i2c-0").WithDriver(mock).Build()
 	assertNoError(t, err)
@@ -333,7 +333,7 @@ func TestDisplay_Clear(t *testing.T) {
 	display.buffer[1] = "Test line 2"
 
 	// Clear the display
-	display.Clear() //nolint:errcheck
+	display.ClearLines() //nolint:errcheck
 
 	// Verify all buffer lines are empty
 	for i, line := range display.buffer {
@@ -457,7 +457,7 @@ func TestDisplay_PrintLines(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Clear buffer before each test
-			display.Clear() //nolint:errcheck
+			display.ClearLines() //nolint:errcheck
 
 			err := display.PrintLines(tt.line, tt.text)
 
@@ -565,7 +565,7 @@ func TestDisplay_MethodsFailWithoutInit(t *testing.T) {
 		{
 			name: "Clear fails without init",
 			operation: func() error {
-				return display.Clear()
+				return display.ClearLines()
 			},
 			errorSubstr: "driver has not been initialized",
 		},
@@ -639,7 +639,7 @@ func TestDisplay_Integration(t *testing.T) {
 	}
 
 	// Clear and verify
-	display.Clear() //nolint:errcheck
+	display.ClearLines() //nolint:errcheck
 	for i, line := range display.buffer {
 		if line != "" {
 			t.Errorf("Expected buffer[%d] to be empty after clear, got %q", i, line)
