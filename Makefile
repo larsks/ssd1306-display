@@ -7,7 +7,7 @@ BINARY_NAME ?= display1306
 
 # Build the display1306 binary
 build:
-	go build -o $(BINARY_NAME) ./cmd/display1306
+	go build -C v2 -o ../$(BINARY_NAME) ./cmd/display1306
 
 # Run tests
 test:

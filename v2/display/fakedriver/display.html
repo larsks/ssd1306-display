@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SSD1306 Display Simulator</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: white;
+            font-family: monospace;
+            text-align: center;
+        }
+        .display {
+            border: 2px solid #333;
+            border-radius: 10px;
+            padding: 10px;
+            background-color: #000;
+            display: inline-block;
+            margin: 20px;
+        }
+        .screen {
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+            width: 512px;
+            height: 256px;
+        }
+        .info {
+            margin-bottom: 20px;
+        }
+        .status {
+            color: #4CAF50;
+            font-size: 12px;
+        }
+        .start-button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 20px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .start-button:hover {
+            background-color: #45a049;
+        }
+        .start-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="info">
+        <h1>SSD1306 Display Simulator</h1>
+        <p>128x64 OLED Display (4x scaled)</p>
+        <p class="status" id="status">Connecting to real-time updates...</p>
+        <button id="startButton" class="start-button" onclick="startDisplay()" disabled>Start Display</button>
+        <p id="waitMessage">Waiting for connection...</p>
+    </div>
+    <div class="display">
+        <img src="data:image/png;base64,{{.ImageData}}" alt="SSD1306 Display" class="screen" id="screen">
+    </div>
+    <script>
+        const eventSource = new EventSource('/events');
+        const screen = document.getElementById('screen');
+        const status = document.getElementById('status');
+        
+        eventSource.onopen = function() {
+            status.textContent = 'Connected - Real-time updates active';
+            status.style.color = '#4CAF50';
+        };
+        
+        eventSource.onmessage = function(event) {
+            const data = event.data;
+            if (data.startsWith('image:')) {
+                screen.src = 'data:image/png;base64,' + data.substring(6);
+            } else if (data.startsWith('status:')) {
+                const serverStatus = data.substring(7);
+                updateButtonState(serverStatus);
+            }
+        };
+        
+        eventSource.onerror = function() {
+            status.textContent = 'Connection error - Trying to reconnect...';
+            status.style.color = '#f44336';
+            // Reset button to enabled state when disconnected
+            updateButtonState('waiting');
+        };
+
+        function updateButtonState(serverStatus) {
+            const startButton = document.getElementById('startButton');
+            const waitMessage = document.getElementById('waitMessage');
+            
+            if (serverStatus === 'waiting') {
+                startButton.disabled = false;
+                startButton.textContent = 'Start Display';
+                waitMessage.textContent = 'Click "Start Display" to begin rendering';
+            } else if (serverStatus === 'started') {
+                startButton.disabled = true;
+                startButton.textContent = 'Display Running';
+                waitMessage.textContent = 'Display is active and rendering';
+            }
+        }
+
+        function startDisplay() {
+            const startButton = document.getElementById('startButton');
+            const waitMessage = document.getElementById('waitMessage');
+            
+            startButton.disabled = true;
+            startButton.textContent = 'Starting...';
+            waitMessage.textContent = 'Starting display...';
+            
+            fetch('/start', { method: 'POST' })
+                .then(response => {
+                    if (response.ok) {
+                        // Status will be updated via SSE message
+                        // No need to manually update button state here
+                    } else {
+                        startButton.disabled = false;
+                        startButton.textContent = 'Start Display';
+                        waitMessage.textContent = 'Failed to start display';
+                    }
+                })
+                .catch(error => {
+                    startButton.disabled = false;
+                    startButton.textContent = 'Start Display';
+                    waitMessage.textContent = 'Error starting display: ' + error.message;
+                });
+        }
+    </script>
+</body>
+</html>
