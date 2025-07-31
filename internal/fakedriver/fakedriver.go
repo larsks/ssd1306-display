@@ -298,7 +298,7 @@ func (d *FakeSSD1306) handleStart(w http.ResponseWriter, r *http.Request) {
 
 	if d.started {
 		w.WriteHeader(http.StatusConflict)
-		w.Write([]byte("Already started"))
+		w.Write([]byte("Already started")) //nolint:errcheck
 		return
 	}
 
@@ -306,12 +306,12 @@ func (d *FakeSSD1306) handleStart(w http.ResponseWriter, r *http.Request) {
 	select {
 	case d.startChan <- true:
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Started"))
+		w.Write([]byte("Started")) //nolint:errcheck
 		// Notify all clients of status change
 		go d.notifyStatus()
 	default:
 		// Channel is full
 		w.WriteHeader(http.StatusConflict)
-		w.Write([]byte("Start signal already sent"))
+		w.Write([]byte("Start signal already sent")) //nolint:errcheck
 	}
 }
