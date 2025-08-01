@@ -22,8 +22,25 @@ jobs:
       - name: Run tests
         run: make test
 
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.semver.outputs.next }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calculate version
+        id: semver
+        uses: ietf-tools/semver-action@v1
+        with:
+          token: ${{ github.token }}
+          branch: main
+
   build:
-    needs: test
+    needs: [test,version]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -53,20 +70,13 @@ jobs:
         with:
           go-version: stable
 
-      - name: Determine version
-        id: semver
-        uses: ietf-tools/semver-action@v1
-        with:
-          token: ${{ github.token }}
-          branch: main
-
       - name: Build binary
         env:
           CGO_ENABLED: 0
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           GOARM: ${{ matrix.goarm }}
-          VERSION: ${{ steps.semver.outputs.next }}
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
           make BINARY_NAME=display1306-${{ matrix.suffix }}${{ matrix.ext }} build
 
@@ -77,21 +87,13 @@ jobs:
           path: display1306-${{ matrix.suffix }}${{ matrix.ext }}
 
   release:
-    needs: build
+    needs: [build,version]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Determine version
-        id: semver
-        uses: ietf-tools/semver-action@v1
-        with:
-          token: ${{ github.token }}
-          branch: main
-          fallbackTag: v0.0.0
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -105,8 +107,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.semver.outputs.next }}
-          name: Release ${{ steps.semver.outputs.next }}
+          tag_name: ${{ needs.version.outputs.version }}
+          name: Release ${{ needs.version.outputs.version }}
           draft: false
           prerelease: false
           files: |
@@ -138,3 +140,11 @@ jobs:
             chmod +x display1306-linux-armv7
             sudo mv display1306-linux-armv7 /usr/local/bin/display1306
             ```
+  image:
+    needs: [version,release]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/image.yaml
+    with:
+      release-version: ${{ needs.version.outputs.version }}
